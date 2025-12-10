@@ -19,6 +19,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "uart.h"
+#include "servo.h"
+#include "ldr.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,7 +34,18 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SERVO_US_MIN   500
+#define SERVO_US_MAX   2500
+#define SERVO_US_MID   ((SERVO_MIN_US + SERVO_MAX_US) / 2)
+#define SERVO_SLOW   800000
+#define SERVO_FAST   100000
+#define TRACK_DEADBAND_SLOW    100    // ADC counts where we consider "good enough"
+#define TRACK_DEADBAND_FAST    40    // ADC counts where we consider "good enough"
+#define TRACK_STEP_US     5     // how many microseconds to move per step
 
+static int servo_us = SERVO_US_MID;
+static int speed = SERVO_FAST;
+static int deadband = TRACK_DEADBAND_SLOW;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -97,16 +110,66 @@ int main(void)
   UART2_WriteESC("[H");
   UART2_WriteESC("[32m");
   UART2_WriteString("\r\nSun Tracker - UART Online\r\n");
-  UART2_WriteString("Jaylan is a cutie patootie.\r\n");
-  /* USER CODE END 2 */
 
+  Servo_Init();
+  UART2_WriteString("Servo initialized on PA8 (TIM1_CH1).\r\n");
+
+  LDR_ADC_Init();
+  UART2_WriteString("ADC init done\r\n");
+  LDR_ADC_SetSampleTime(LDR_SMPR_47C5);
+
+  // Center the servo to start
+  servo_us = SERVO_US_MID;
+  Servo_SetPulseUs(servo_us);
+  UART2_WriteString("Servo centered.\r\n");
+
+
+  /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-    /* USER CODE BEGIN 3 */
+      // 1) Read sensors
+      uint16_t left  = LDR_ReadLeft();   // PA0
+      uint16_t right = LDR_ReadRight();  // PA1
+
+      // 2) Compute error: positive means more light on the right
+      int32_t error = (int32_t)left - (int32_t)right;
+
+      // 3) Apply deadband (to avoid jitter when nearly aligned)
+      if (error > deadband) {
+          // Light is stronger on the RIGHT → move servo right
+          servo_us += TRACK_STEP_US;
+      } else if (error < -deadband) {
+          // Light is stronger on the LEFT → move servo left
+          servo_us -= TRACK_STEP_US;
+      } else {
+          // Within deadband: do nothing (or micro-dither later if you want)
+      }
+
+      // 4) Clamp servo pulse to safe range
+      if (servo_us < SERVO_US_MIN) servo_us = SERVO_US_MIN;
+      if (servo_us > SERVO_US_MAX) servo_us = SERVO_US_MAX;
+
+      // 5) Update servo position
+      Servo_SetPulseUs((uint16_t)servo_us);
+
+      // 6) Telemetry
+      UART2_WriteString("L=");
+      UART2_WriteNumber(left);
+      UART2_WriteString(" R=");
+      UART2_WriteNumber(right);
+      UART2_WriteString(" err=");
+      UART2_WriteNumber(error >= 0 ? (uint32_t)error : (uint32_t)(-error));
+      UART2_WriteString(error >= 0 ? " (R>L)" : " (L>R)");
+      UART2_WriteString(" pwm_us=");
+      UART2_WriteNumber((uint32_t)servo_us);
+      UART2_WriteString("\r\n");
+
+      // 7) Small delay so it moves gradually (adjust as needed)
+      for (volatile int i = 0; i < speed; i++) { __NOP(); }
   }
+
   /* USER CODE END 3 */
 }
 

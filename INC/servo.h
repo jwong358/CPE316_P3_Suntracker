@@ -1,28 +1,25 @@
-#ifndef SERVO_H
-#define SERVO_H
+/*
+ * servo.h
+ *
+ *  Created on: Dec 8, 2025
+ *      Author: jaylanwong
+ */
 
-#include "stm32l476xx.h"
+#ifndef SRC_SERVO_H_
+#define SRC_SERVO_H_
+
+#include "stm32l4xx_hal.h"
 #include <stdint.h>
 
-#define SERVO_MIN_US   500   // 1.0 ms pulse
-#define SERVO_MAX_US   2500   // 2.0 ms pulse
-#define SERVO_MID_US   ((SERVO_MIN_US + SERVO_MAX_US) / 2)   // 1.5 ms (90°)
-#define SERVO_PERIOD_US 20000 // 20 ms period (50 Hz)
+#define SERVO_MIN_US 500 									// 1.0ms (0°)
+#define SERVO_MAX_US 2500									// 2.0ms (180°)
+#define SERVO_MID_US   ((SERVO_MIN_US + SERVO_MAX_US) / 2)		// 1.5 ms (90°)
+#define SERVO_SLOW   800000
+#define SERVO_FAST   100000
 
-/**
- * Initialize TIM1 CH1 on PA8 for servo control (50 Hz PWM).
- *        Assumes SystemCoreClock / APB2 timer clock = 80 MHz.
- */
-void Servo_Init(void);
+void SERVO_init(uint32_t timer_clk_hz);
+void SERVO_set_pulse_us(uint16_t pulse_us);
+void SERVO_set_angle(float deg);
 
-/**
- * Set servo pulse width in microseconds (typically 1000–2000 us).
- */
-void Servo_SetPulseUs(uint16_t us);
 
-/**
- * Set servo angle in degrees (0–180) mapped to 1000–2000 us.
- */
-void Servo_SetAngleDeg(float deg);
-
-#endif // SERVO_H
+#endif /* SRC_SERVO_H_ */

@@ -1,109 +1,34 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+#include <servo.h>
 #include "main.h"
 #include "uart.h"
 #include "servo.h"
-#include "ldr.h"
+#include "idr.h"
+#include "pin.h"
+#include "watchdog.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-#define SERVO_US_MIN   500
-#define SERVO_US_MAX   2500
-#define SERVO_US_MID   ((SERVO_MIN_US + SERVO_MAX_US) / 2)
-#define SERVO_SLOW   800000
-#define SERVO_FAST   100000
 #define TRACK_DEADBAND_SLOW    100    // ADC counts where we consider "good enough"
 #define TRACK_DEADBAND_FAST    40    // ADC counts where we consider "good enough"
 #define TRACK_STEP_US     5     // how many microseconds to move per step
 
-static int servo_us = SERVO_US_MID;
+static int servo_us = SERVO_MID_US;
 static int speed = SERVO_FAST;
 static int deadband = TRACK_DEADBAND_SLOW;
-/* USER CODE END PD */
 
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef huart2;
-
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
 {
 
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
+
+
   UART2_Init(80000000);
 
   UART2_WriteESC("[2J");
@@ -111,22 +36,20 @@ int main(void)
   UART2_WriteESC("[32m");
   UART2_WriteString("\r\nSun Tracker - UART Online\r\n");
 
-  Servo_Init();
+  SERVO_init();
   UART2_WriteString("Servo initialized on PA8 (TIM1_CH1).\r\n");
-
-  LDR_ADC_Init();
-  UART2_WriteString("ADC init done\r\n");
-  LDR_ADC_SetSampleTime(LDR_SMPR_47C5);
-
-  // Center the servo to start
-  servo_us = SERVO_US_MID;
-  Servo_SetPulseUs(servo_us);
   UART2_WriteString("Servo centered.\r\n");
 
+  LDR_ADC_Init();
+  UART2_WriteString("ADC initialized\r\n");
+  LDR_ADC_SetSampleTime(LDR_SMPR_47C5);
 
-  /* USER CODE END 2 */
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+  PIN_init();
+  UART2_WriteString("PIN interrupt enabled\r\n");
+
+  WATCHDOG_init();
+  UART2_WriteString("WATCHDOG is watching\r\n");
+
   while (1)
   {
       // 1) Read sensors
@@ -140,19 +63,17 @@ int main(void)
       if (error > deadband) {
           // Light is stronger on the RIGHT → move servo right
           servo_us += TRACK_STEP_US;
+          WATCHDOG_refresh();
       } else if (error < -deadband) {
           // Light is stronger on the LEFT → move servo left
           servo_us -= TRACK_STEP_US;
+          WATCHDOG_refresh();
       } else {
           // Within deadband: do nothing (or micro-dither later if you want)
       }
 
-      // 4) Clamp servo pulse to safe range
-      if (servo_us < SERVO_US_MIN) servo_us = SERVO_US_MIN;
-      if (servo_us > SERVO_US_MAX) servo_us = SERVO_US_MAX;
-
       // 5) Update servo position
-      Servo_SetPulseUs((uint16_t)servo_us);
+      SERVO_set_pulse_us((uint16_t)servo_us);
 
       // 6) Telemetry
       UART2_WriteString("L=");
@@ -169,8 +90,6 @@ int main(void)
       // 7) Small delay so it moves gradually (adjust as needed)
       for (volatile int i = 0; i < speed; i++) { __NOP(); }
   }
-
-  /* USER CODE END 3 */
 }
 
 /**

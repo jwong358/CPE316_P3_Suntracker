@@ -85,4 +85,3 @@ void USART2_IRQHandler(void)
         UART2_OnRxChar(c);
     }
 }
-

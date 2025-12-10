@@ -1,5 +1,11 @@
-// ldr.c
-#include "ldr.h"
+/*
+ * uart.c
+ *
+ *  Created on: Dec 8, 2025
+ *      Author: SALUT
+ */
+
+#include "idr.h"
 
 static uint32_t ldr_sample_time_bits = LDR_SMPR_47C5;
 

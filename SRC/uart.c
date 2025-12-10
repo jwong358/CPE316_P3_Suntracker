@@ -63,7 +63,7 @@ void UART2_WriteString(const char *s)
     }
 }
 
-/* For VT100: send ESC + sequence, e.g. UART2_WriteESC("[2J"); */
+/* For VT100 send ESC + sequence */
 void UART2_WriteESC(const char *seq)
 {
     UART2_WriteChar(0x1B);
@@ -77,7 +77,7 @@ __attribute__((weak)) void UART2_OnRxChar(char c)
     UART2_WriteChar(c);
 }
 
-/* Actual ISR called on RX */
+/* ISR called on RX */
 void USART2_IRQHandler(void)
 {
     if (USART2->ISR & USART_ISR_RXNE) {
@@ -85,4 +85,29 @@ void USART2_IRQHandler(void)
         UART2_OnRxChar(c);
     }
 }
+
+void UART2_WriteNumber(uint32_t n)
+{
+    char buf[10];      // enough for 32-bit unsigned
+    int i = 0;
+
+    // Special case for zero:
+    if (n == 0) {
+        UART2_WriteChar('0');
+        return;
+    }
+
+    // Extract digits (in reverse order)
+    while (n > 0) {
+        uint32_t digit = n % 10;
+        buf[i++] = '0' + digit;
+        n /= 10;
+    }
+
+    // Output digits in correct order
+    while (i > 0) {
+        UART2_WriteChar(buf[--i]);
+    }
+}
+
 

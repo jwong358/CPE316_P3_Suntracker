@@ -21,6 +21,8 @@
 #include "uart.h"
 #include "servo.h"
 #include "ldr.h"
+#include "pin.h"
+#include "watchdog.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -45,7 +47,7 @@
 
 static int servo_us = SERVO_US_MID;
 static int speed = SERVO_FAST;
-static int deadband = TRACK_DEADBAND_SLOW;
+static int deadband = TRACK_DEADBAND_FAST;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -123,7 +125,11 @@ int main(void)
   Servo_SetPulseUs(servo_us);
   UART2_WriteString("Servo centered.\r\n");
 
+  PIN_init();
+  UART2_WriteString("PIN interrupt enabled\r\n");
 
+  WATCHDOG_init();
+  UART2_WriteString("WATCHDOG is watching\r\n");
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -140,9 +146,11 @@ int main(void)
       if (error > deadband) {
           // Light is stronger on the RIGHT → move servo right
           servo_us += TRACK_STEP_US;
+          WATCHDOG_refresh();
       } else if (error < -deadband) {
           // Light is stronger on the LEFT → move servo left
           servo_us -= TRACK_STEP_US;
+          WATCHDOG_refresh();
       } else {
           // Within deadband: do nothing (or micro-dither later if you want)
       }

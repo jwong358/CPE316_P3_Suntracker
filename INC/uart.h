@@ -15,6 +15,7 @@ void UART2_Init(uint32_t sysclk_hz);
 void UART2_WriteChar(char c);
 void UART2_WriteString(const char *s);
 void UART2_WriteESC(const char *seq);
+void UART2_WriteNumber(uint32_t n);
 
 
 

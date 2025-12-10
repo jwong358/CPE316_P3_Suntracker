@@ -6,6 +6,28 @@
  */
 
 #include "uart.h"
+#include "stm32l476xx.h"
+#include "servo.h"
+
+
+
+extern int servo_us;
+extern int speed;
+extern int deadband;
+extern volatile uint8_t g_print_status;
+
+
+#define SERVO_US_MIN           500
+#define SERVO_US_MAX          2500
+#define SERVO_US_MID  ((SERVO_US_MIN + SERVO_US_MAX) / 2)
+#define SERVO_SLOW       800000
+#define SERVO_FAST       100000
+#define TRACK_DEADBAND_SLOW   100
+#define TRACK_DEADBAND_FAST    40
+
+
+void Servo_SetPulseUs(uint16_t us);
+
 
 void UART2_Init(uint32_t sysclk_hz)
 {
@@ -70,12 +92,54 @@ void UART2_WriteESC(const char *seq)
     UART2_WriteString(seq);
 }
 
-/* User hook: override this in your main.c if you want custom behavior */
-__attribute__((weak)) void UART2_OnRxChar(char c)
+
+void UART2_OnRxChar(char c)
 {
-    // Default: simple echo
-    UART2_WriteChar(c);
+    switch (c)
+    {
+    case 'h':
+    case 'H':
+        UART2_WriteString("\r\nCommands:\r\n");
+        UART2_WriteString("  h - help\r\n");
+        UART2_WriteString("  f - fast tracking\r\n");
+        UART2_WriteString("  s - slow tracking\r\n");
+        UART2_WriteString("  c - center servo\r\n");
+        UART2_WriteString("  p - print one status line\r\n");
+        break;
+
+    case 'f':   // FAST mode
+    case 'F':
+        speed    = SERVO_FAST;
+        deadband = TRACK_DEADBAND_FAST;
+        UART2_WriteString("\r\nMode: FAST (small deadband, quick moves)\r\n");
+        break;
+
+    case 's':   // SLOW mode
+    case 'S':
+        speed    = SERVO_SLOW;
+        deadband = TRACK_DEADBAND_SLOW;
+        UART2_WriteString("\r\nMode: SLOW (large deadband, slower moves)\r\n");
+        break;
+
+    case 'c':   // center servo
+    case 'C':
+        servo_us = SERVO_US_MID;
+        Servo_SetPulseUs((uint16_t)servo_us);
+        UART2_WriteString("\r\nServo centered.\r\n");
+        break;
+
+    case 'p':   // print one status line
+    case 'P':
+        g_print_status = 1;
+        break;
+
+    default:
+        // optional: echo or ignore unknown commands
+        // UART2_WriteChar(c);
+        break;
+    }
 }
+
 
 /* ISR called on RX */
 void USART2_IRQHandler(void)

@@ -38,16 +38,19 @@
 /* USER CODE BEGIN PD */
 #define SERVO_US_MIN   500
 #define SERVO_US_MAX   2500
-#define SERVO_US_MID   ((SERVO_MIN_US + SERVO_MAX_US) / 2)
+#define SERVO_US_MID   ((SERVO_US_MIN + SERVO_US_MAX) / 2)
 #define SERVO_SLOW   800000
 #define SERVO_FAST   100000
 #define TRACK_DEADBAND_SLOW    100    // ADC counts where we consider "good enough"
 #define TRACK_DEADBAND_FAST    40    // ADC counts where we consider "good enough"
 #define TRACK_STEP_US     5     // how many microseconds to move per step
 
-static int servo_us = SERVO_US_MID;
-static int speed = SERVO_FAST;
-static int deadband = TRACK_DEADBAND_FAST;
+int servo_us = SERVO_US_MID;
+int speed    = SERVO_FAST;
+int deadband = TRACK_DEADBAND_FAST;
+
+volatile uint8_t g_print_status = 0;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -130,29 +133,29 @@ int main(void)
 
   WATCHDOG_init();
   UART2_WriteString("WATCHDOG is watching\r\n");
+
+  UART2_WriteString("Type H for help\r\n");
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
       // 1) Read sensors
-      uint16_t left  = LDR_ReadLeft();   // PA0
-      uint16_t right = LDR_ReadRight();  // PA1
+      uint16_t left  = LDR_ReadLeft();    // PA0
+      uint16_t right = LDR_ReadRight();   // PA1
 
-      // 2) Compute error: positive means more light on the right
+      // 2) Compute error: positive means more light on the LEFT (you used left-right)
       int32_t error = (int32_t)left - (int32_t)right;
 
       // 3) Apply deadband (to avoid jitter when nearly aligned)
       if (error > deadband) {
-          // Light is stronger on the RIGHT → move servo right
+          // Light stronger on LEFT → move servo in one direction
           servo_us += TRACK_STEP_US;
-          WATCHDOG_refresh();
       } else if (error < -deadband) {
-          // Light is stronger on the LEFT → move servo left
+          // Light stronger on RIGHT → move servo other direction
           servo_us -= TRACK_STEP_US;
-          WATCHDOG_refresh();
       } else {
-          // Within deadband: do nothing (or micro-dither later if you want)
+          // Within deadband: no move
       }
 
       // 4) Clamp servo pulse to safe range
@@ -162,21 +165,39 @@ int main(void)
       // 5) Update servo position
       Servo_SetPulseUs((uint16_t)servo_us);
 
-      // 6) Telemetry
-      UART2_WriteString("L=");
-      UART2_WriteNumber(left);
-      UART2_WriteString(" R=");
-      UART2_WriteNumber(right);
-      UART2_WriteString(" err=");
-      UART2_WriteNumber(error >= 0 ? (uint32_t)error : (uint32_t)(-error));
-      UART2_WriteString(error >= 0 ? " (R>L)" : " (L>R)");
-      UART2_WriteString(" pwm_us=");
-      UART2_WriteNumber((uint32_t)servo_us);
-      UART2_WriteString("\r\n");
+      // 6) Smart watchdog:
+      //    - If servo is at MIN or MAX, do NOT refresh → if it gets stuck there,
+      //      watchdog will eventually reset the system.
+      //    - Otherwise, refresh every loop.
+      if (servo_us != SERVO_US_MIN && servo_us != SERVO_US_MAX) {
+          WATCHDOG_refresh();
+      }
 
-      // 7) Small delay so it moves gradually (adjust as needed)
+      // 7) On-demand telemetry (only when 'p' was pressed)
+      if (g_print_status) {
+          UART2_WriteString("L=");
+          UART2_WriteNumber(left);
+          UART2_WriteString(" R=");
+          UART2_WriteNumber(right);
+          UART2_WriteString(" err=");
+          // print signed error
+          if (error < 0) {
+              UART2_WriteChar('-');
+              UART2_WriteNumber((uint32_t)(-error));
+          } else {
+              UART2_WriteNumber((uint32_t)error);
+          }
+          UART2_WriteString(" pwm_us=");
+          UART2_WriteNumber((uint32_t)servo_us);
+          UART2_WriteString("\r\n");
+
+          g_print_status = 0;   // clear flag so it prints only once per 'p'
+      }
+
+      // 8) Small delay so it moves gradually; speed is set by CLI (fast/slow)
       for (volatile int i = 0; i < speed; i++) { __NOP(); }
   }
+
 
   /* USER CODE END 3 */
 }

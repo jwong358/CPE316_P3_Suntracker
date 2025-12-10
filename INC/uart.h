@@ -16,6 +16,8 @@ void UART2_WriteChar(char c);
 void UART2_WriteString(const char *s);
 void UART2_WriteESC(const char *seq);
 void UART2_WriteNumber(uint32_t n);
+void UART2_OnRxChar(char c);
+
 
 
 
